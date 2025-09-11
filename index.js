@@ -731,9 +731,11 @@ if (io) {
             console.log('🔄 Requisição de novo QR code recebida');
             if (!isClientReady) {
                 currentQRCode = null;
-                client.resetQR().then(() => {
-                    console.log('🔄 Nova tentativa de geração de QR code solicitada');
-                }).catch(err => console.error('❌ Erro ao solicitar novo QR code:', err.stack));
+                // Remova ou comente esta linha:
+                // client.resetQR().then(() => {
+                //     console.log('🔄 Nova tentativa de geração de QR code solicitada');
+                // }).catch(err => console.error('❌ Erro ao solicitar novo QR code:', err.stack));
+                // O QR será gerado automaticamente quando necessário
             } else {
                 socket.emit('botStatus', { isReady: true });
                 console.log('ℹ️ Bot já está conectado, novo QR code não necessário');
