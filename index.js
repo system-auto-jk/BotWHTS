@@ -52,8 +52,7 @@ const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        executablePath: process.env.CHROMIUM_PATH || undefined
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
 });
 
@@ -69,7 +68,7 @@ let currentQRCode = null;
 initDatabase();
 const db = getDb();
 
-// Função para atualizar ultima_mensagem (adicionada diretamente aqui; mover para Database.js se necessário)
+// Função para atualizar ultima_mensagem
 function atualizarUltimaMensagem(chatId) {
     const agora = Date.now();
     db.run(
@@ -85,7 +84,7 @@ function atualizarUltimaMensagem(chatId) {
     );
 }
 
-// Função para interagir com o Gemini (mantida, mas não usada)
+// Função para interagir com o Gemini
 async function interactWithGemini(chatId, message) {
     if (!chatHistories[chatId]) chatHistories[chatId] = [];
     chatHistories[chatId].push(message);
@@ -144,14 +143,14 @@ client.on('qr', qr => {
     console.log('📡 QR Code emitido via Socket.IO:', qr);
     setTimeout(() => {
         if (!isClientReady && currentQRCode === qr) {
-            console.log('⚠️ QR code expirado, reiniciando...');
+            console.log('⚠️ QR code expirado, reiniciando client...');
             currentQRCode = null;
             io.emit('qrCode', null); // Notificar que o QR code expirou
-            client.resetQR().then(() => {
-                console.log('🔄 Nova tentativa de geração de QR code');
-            }).catch(err => console.error('❌ Erro ao reiniciar QR code:', err.stack));
+            client.initialize().then(() => {
+                console.log('🔄 Cliente reinicializado para gerar novo QR code');
+            }).catch(err => console.error('❌ Erro ao reiniciar cliente:', err.stack));
         }
-    }, 60000); // Aumentado para 60 segundos para testes
+    }, 60000); // 60 segundos para expiração
 });
 
 // Evento de conexão bem-sucedida
@@ -731,9 +730,9 @@ if (io) {
             console.log('🔄 Requisição de novo QR code recebida');
             if (!isClientReady) {
                 currentQRCode = null;
-                client.resetQR().then(() => {
-                    console.log('🔄 Nova tentativa de geração de QR code solicitada');
-                }).catch(err => console.error('❌ Erro ao solicitar novo QR code:', err.stack));
+                client.initialize().then(() => {
+                    console.log('🔄 Cliente reinicializado para gerar novo QR code');
+                }).catch(err => console.error('❌ Erro ao reiniciar cliente:', err.stack));
             } else {
                 socket.emit('botStatus', { isReady: true });
                 console.log('ℹ️ Bot já está conectado, novo QR code não necessário');
