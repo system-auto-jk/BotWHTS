@@ -1,6 +1,2 @@
-2025/09/18-10:33:08.351 3c20 Reusing MANIFEST C:\Users\syste\OneDrive\Área de Trabalho\BOT WP PIZZA\BOT WHATSAPP - PIZZARIA - Copia\.wwebjs_auth_custom\session\Default\Local Storage\leveldb/MANIFEST-000001
-2025/09/18-10:33:08.356 3c20 Recovering log #4
-2025/09/18-10:33:08.358 3c20 Reusing old log C:\Users\syste\OneDrive\Área de Trabalho\BOT WP PIZZA\BOT WHATSAPP - PIZZARIA - Copia\.wwebjs_auth_custom\session\Default\Local Storage\leveldb/000004.log 
-2025/09/18-13:33:23.541 2b58 Level-0 table #8: started
-2025/09/18-13:33:23.547 2b58 Level-0 table #8: 14325 bytes OK
-2025/09/18-13:33:23.550 2b58 Delete type=0 #4
+2025/09/18-17:32:28.168 5cec Creating DB C:\Users\syste\OneDrive\Documentos\GitHubReposit\BotWHTS\.wwebjs_auth_custom\session\Default\Local Storage\leveldb since it was missing.
+2025/09/18-17:32:28.208 5cec Reusing MANIFEST C:\Users\syste\OneDrive\Documentos\GitHubReposit\BotWHTS\.wwebjs_auth_custom\session\Default\Local Storage\leveldb/MANIFEST-000001
