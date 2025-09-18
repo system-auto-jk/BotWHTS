@@ -2,33 +2,6 @@ const prompt = require('prompt-sync')({ sigint: true });
 const pool = require('./dbConnection'); // Importa a conexão com o banco de dados
 const { getBotStatus, setBotStatus, io } = require('./Server');
 
-// Função para verificar autenticação no banco de dados
-async function authenticate() {
-  const providedEmail = prompt('Digite o email: ');
-  const providedPassword = prompt('Digite a senha: ', { echo: '*' });
-
-  let connection;
-  try {
-    connection = await pool.getConnection();
-    const [rows] = await connection.query(
-      'SELECT * FROM admins WHERE email = ? AND password = ?',
-      [providedEmail, providedPassword]
-    );
-
-    if (rows.length > 0) {
-      console.log('✅ Autenticação bem-sucedida');
-      return true;
-    } else {
-      console.error('❌ Falha na autenticação: Email ou senha incorretos.');
-      return false;
-    }
-  } catch (err) {
-    console.error('❌ Erro ao conectar ou consultar o banco de dados:', err.message);
-    return false;
-  } finally {
-    if (connection) connection.release();
-  }
-}
 
 // Verificação de autenticação antes de prosseguir
 (async () => {
