@@ -78,8 +78,7 @@ const client = new Client({
       '--disable-dev-shm-usage',
       '--disable-gpu'
     ],
-    executablePath: process.env.CHROMIUM_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    dumpio: false
+    executablePath: process.env.CHROMIUM_PATH || undefined
   }
 });
 
