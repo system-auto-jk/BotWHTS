@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.db
+*.sqlite
+.wwebjs_auth/
+.wwebjs_cache/
+log.txt
