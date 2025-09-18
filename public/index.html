@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Administrativo - Bot WhatsApp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+            min-height: 100vh;
+            font-family: 'Inter', sans-serif;
+        }
+        .modal {
+            transition: all 0.3s ease-in-out;
+        }
+        .modal-hidden {
+            transform: translateY(-20px);
+            opacity: 0;
+            pointer-events: none;
+        }
+        .modal-visible {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .glow-effect {
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2);
+            transition: box-shadow 0.3s ease;
+        }
+        .glow-effect:hover {
+            box-shadow: 0 6px 30px rgba(59, 130, 246, 0.3);
+        }
+        .modal-content {
+            border-radius: 1rem;
+            background: linear-gradient(145deg, #ffffff, #f1f5f9);
+            backdrop-filter: blur(10px);
+        }
+        .input-field {
+            transition: all 0.2s ease-in-out;
+        }
+        .input-field:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        .btn-primary {
+            background: linear-gradient(to right, #3b82f6, #60a5fa);
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(to right, #2563eb, #3b82f6);
+            transform: translateY(-1px);
+        }
+        .btn-secondary {
+            background: linear-gradient(to right, #e5e7eb, #d1d5db);
+            transition: all 0.3s ease;
+        }
+        .btn-secondary:hover {
+            background: linear-gradient(to right, #d1d5db, #9ca3af);
+            transform: translateY(-1px);
+        }
+        .btn-danger {
+            background: linear-gradient(to right, #ef4444, #f87171);
+            transition: all 0.3s ease;
+        }
+        .btn-danger:hover {
+            background: linear-gradient(to right, #dc2626, #ef4444);
+            transform: translateY(-1px);
+        }
+        .btn-whatsapp {
+            background: #25D366;
+            transition: all 0.3s ease;
+        }
+        .btn-whatsapp:hover {
+            background: #20b359;
+            transform: translateY(-1px);
+        }
+        table {
+            border-spacing: 0;
+            border-collapse: separate;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        th, td {
+            border: 1px solid #e5e7eb;
+        }
+        thead tr {
+            background: linear-gradient(to right, #f3f4f6, #e5e7eb);
+        }
+        .hidden {
+            display: none;
+        }
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+            margin-left: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        #qrTimer {
+            font-size: 0.9rem;
+            color: #4b5563;
+            margin-top: 8px;
+            text-align: center;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        .status-active {
+            background-color: #22c55e; /* Verde */
+        }
+        .status-inactive {
+            background-color: #ef4444; /* Vermelho */
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4 sm:p-6">
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 modal-visible">
+        <div class="modal-content p-8 w-full max-w-md glow-effect">
+            <h2 class="text-2xl font-semibold text-gray-900 mb-4">Login do Administrador</h2>
+            <p id="loginMessage" class="text-gray-600 mb-6">Verificando status do bot...</p>
+            <div id="qrcode" class="flex justify-center mb-6"></div>
+            <div id="qrTimer" class="hidden"></div>
+            <button id="retryQR" class="w-full btn-secondary text-gray-800 p-3 rounded-lg font-medium mb-4 hidden">Tentar Gerar QR Code Novamente</button>
+            <input id="adminNumber" type="text" placeholder="Número do administrador (ex.: 557182547726)" class="input-field w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 hidden">
+            <input id="verificationCode" type="text" placeholder="Código de verificação" class="input-field w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 hidden">
+            <button id="requestCode" class="w-full btn-primary text-white p-3 rounded-lg font-medium hidden">Enviar Código</button>
+            <button id="verifyCode" class="w-full btn-primary text-white p-3 rounded-lg font-medium hidden">Verificar Código</button>
+            <p id="loginError" class="text-red-500 text-sm mt-3 hidden"></p>
+        </div>
+    </div>
+
+    <!-- Main Admin Panel -->
+    <div id="adminPanel" class="hidden w-full max-w-5xl modal-content rounded-lg shadow-lg p-8 glow-effect">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Painel Administrativo - Bot WhatsApp</h1>
+            <button id="logoutButton" class="btn-danger text-white p-3 rounded-lg font-medium">Sair</button>
+        </div>
+        
+        <!-- Admin Actions -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <button onclick="openConfirmModal('reset_atendimentos', 'Confirmar reset de atendimentos? Isso apagará todos os registros de atendimentos.')" class="btn-danger text-white p-4 rounded-lg font-medium">Resetar Atendimentos</button>
+            <button onclick="openConfirmModal('reset_saudados', 'Confirmar reset de saudados? Isso apagará todos os registros de saudação.')" class="btn-danger text-white p-4 rounded-lg font-medium">Resetar Saudados</button>
+            <button onclick="openConfirmModal('reset_cadastros', 'Confirmar reset de cadastros? Isso apagará todos os cadastros e cadastros em andamento.')" class="btn-danger text-white p-4 rounded-lg font-medium">Resetar Cadastros</button>
+            <button onclick="openConfirmModal('reset_banco', 'Confirmar reset do banco inteiro? Isso apagará todos os dados.')" class="btn-danger text-white p-4 rounded-lg font-medium">Resetar Banco Inteiro</button>
+            <button onclick="listCadastros()" class="btn-primary text-white p-4 rounded-lg font-medium">Listar Cadastros</button>
+            <button onclick="exportCadastros()" class="btn-primary text-white p-4 rounded-lg font-medium">Exportar Cadastros (CSV)</button>
+            <button onclick="listOngoingAttendances()" class="btn-primary text-white p-4 rounded-lg font-medium">Listar Atendimentos</button>
+            <button onclick="listNewOrders()" class="btn-primary text-white p-4 rounded-lg font-medium">Lista Pedido</button>
+            <button onclick="openAddNumberModal()" class="btn-primary text-white p-4 rounded-lg font-medium">Adicionar Número à Lista</button>
+            <button onclick="listBlockedNumbers()" class="btn-primary text-white p-4 rounded-lg font-medium">Listar Números Bloqueados</button>
+            <button onclick="openResetSaudacaoModal()" class="btn-primary text-white p-4 rounded-lg font-medium">Resetar Saudação Usuário</button>
+            <button onclick="openConfirmModal('parar_bot_geral', 'Confirmar parada do bot para todos os usuários?')" class="btn-danger text-white p-4 rounded-lg font-medium">Parar Bot Geral</button>
+            <button onclick="openConfirmModal('reativar_bot_geral', 'Confirmar reativação do bot para todos os usuários?')" class="btn-danger text-white p-4 rounded-lg font-medium">Reativar Bot Geral</button>
+            <button onclick="openConfirmModal('reset_all', 'Confirmar reinicialização do bot? Isso resetará todos os atendimentos e saudações de todos os usuários.')" class="btn-danger text-white p-4 rounded-lg font-medium">Reiniciar Bot</button>
+        </div>
+
+        <!-- Cadastros Table -->
+        <div id="cadastrosTable" class="table-container hidden">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">Cadastros</h2>
+            <table class="w-full">
+                <thead>
+                    <tr>
+                        <th class="p-3 text-left text-gray-700 font-medium">ID</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Nome</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Número</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Restaurante</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Contato</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Data</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="cadastrosBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Attendances Table -->
+        <div id="attendancesTable" class="table-container hidden">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">Atendimentos</h2>
+            <table class="w-full">
+                <thead>
+                    <tr>
+                        <th class="p-3 text-left text-gray-700 font-medium">Chat ID</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Nome</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Status</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Data/Hora</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Status do Bot</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="attendancesBody"></tbody>
+            </table>
+        </div>
+
+        <!-- New Orders Table -->
+        <div id="newOrdersTable" class="table-container hidden">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">Novos Pedidos</h2>
+            <table class="w-full">
+                <thead>
+                    <tr>
+                        <th class="p-3 text-left text-gray-700 font-medium">Chat ID</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Nome</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Status</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Data/Hora</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Status do Bot</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="newOrdersBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Blocked Numbers Table -->
+        <div id="blockedNumbersTable" class="table-container hidden">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">Números Bloqueados</h2>
+            <table class="w-full">
+                <thead>
+                    <tr>
+                        <th class="p-3 text-left text-gray-700 font-medium">Número</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Data de Adição</th>
+                        <th class="p-3 text-left text-gray-700 font-medium">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="blockedNumbersBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Delete Cadastro Modal -->
+        <div id="deleteCadastroModal" class="modal fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 modal-hidden">
+            <div class="modal-content p-8 w-full max-w-md glow-effect">
+                <h2 class="text-2xl font-semibold text-gray-900 mb-4">Deletar Cadastro</h2>
+                <p class="text-gray-600 mb-6">Digite o ID do cadastro a ser deletado:</p>
+                <input id="deleteCadastroId" type="number" placeholder="ID do cadastro" class="input-field w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" min="1">
+                <div class="flex gap-4">
+                    <button onclick="confirmDeleteCadastro()" class="w-full btn-danger text-white p-3 rounded-lg font-medium">Confirmar</button>
+                    <button onclick="closeModal('deleteCadastroModal')" class="w-full btn-secondary text-gray-800 p-3 rounded-lg font-medium">Cancelar</button>
+                </div>
+                <p id="deleteError" class="text-red-500 text-sm mt-3 hidden"></p>
+            </div>
+        </div>
+
+        <!-- Reset Saudacao Modal -->
+        <div id="resetSaudacaoModal" class="modal fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 modal-hidden">
+            <div class="modal-content p-8 w-full max-w-md glow-effect">
+                <h2 class="text-2xl font-semibold text-gray-900 mb-4">Resetar Saudação Usuário</h2>
+                <p class="text-gray-600 mb-6">Digite o Chat ID do usuário para resetar a saudação (ex.: 557182547726@c.us):</p>
+                <input id="resetSaudacaoChatId" type="text" placeholder="Chat ID do usuário" class="input-field w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <div class="flex gap-4">
+                    <button onclick="confirmResetSaudacao()" class="w-full btn-primary text-white p-3 rounded-lg font-medium">Confirmar</button>
+                    <button onclick="closeModal('resetSaudacaoModal')" class="w-full btn-secondary text-gray-800 p-3 rounded-lg font-medium">Cancelar</button>
+                </div>
+                <p id="resetSaudacaoError" class="text-red-500 text-sm mt-3 hidden"></p>
+            </div>
+        </div>
+
+        <!-- Add Number Modal -->
+        <div id="addNumberModal" class="modal fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 modal-hidden">
+            <div class="modal-content p-8 w-full max-w-md glow-effect">
+                <h2 class="text-2xl font-semibold text-gray-900 mb-4">Adicionar Número à Lista</h2>
+                <p class="text-gray-600 mb-6">Digite o número de telefone (ex.: 557182547726):</p>
+                <input id="blockNumber" type="text" placeholder="Número de telefone" class="input-field w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <div class="flex gap-4">
+                    <button onclick="confirmAddNumber()" class="w-full btn-primary text-white p-3 rounded-lg font-medium">Confirmar</button>
+                    <button onclick="closeModal('addNumberModal')" class="w-full btn-secondary text-gray-800 p-3 rounded-lg font-medium">Cancelar</button>
+                </div>
+                <p id="addNumberError" class="text-red-500 text-sm mt-3 hidden"></p>
+            </div>
+        </div>
+
+        <!-- Confirmation Modal -->
+        <div id="confirmModal" class="modal fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 modal-hidden">
+            <div class="modal-content p-8 w-full max-w-md glow-effect">
+                <h2 class="text-2xl font-semibold text-gray-900 mb-4">Confirmação</h2>
+                <p id="confirmMessage" class="text-gray-600 mb-6"></p>
+                <div class="flex gap-4">
+                    <button id="confirmAction" class="w-full btn-primary text-white p-3 rounded-lg font-medium">Confirmar</button>
+                    <button onclick="closeModal('confirmModal')" class="w-full btn-secondary text-gray-800 p-3 rounded-lg font-medium">Cancelar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- WhatsApp Action Modal -->
+        <div id="whatsAppActionModal" class="modal fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 modal-hidden">
+            <div class="modal-content p-8 w-full max-w-md glow-effect">
+                <h2 class="text-2xl font-semibold text-gray-900 mb-4">Ação via WhatsApp</h2>
+                <p id="whatsAppActionMessage" class="text-gray-600 mb-6"></p>
+                <div class="flex gap-4">
+                    <button onclick="openWhatsApp('557182547726@c.us')" class="w-full btn-whatsapp text-white p-3 rounded-lg font-medium">Abrir WhatsApp</button>
+                    <button onclick="closeModal('whatsAppActionModal')" class="w-full btn-secondary text-gray-800 p-3 rounded-lg font-medium">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentAction = '';
+        let currentChatId = '';
+        let isLoggedIn = false;
+        let socket = null;
+        let qrcodeInstance = null;
+        let qrTimer = null;
+        let autoRefreshInterval = null;
+
+        // Initialize: Show login modal initially
+        document.getElementById('adminPanel').classList.add('hidden');
+        document.getElementById('loginModal').classList.add('modal-visible');
+        initializeWebSocket();
+        checkBotStatus();
+
+        // Initialize WebSocket connection
+        function initializeWebSocket() {
+            socket = io();
+
+            socket.on('connect', () => {
+                console.log('✅ Conectado ao WebSocket');
+            });
+
+            socket.on('qrCode', (qr) => {
+                console.log('📸 QR code recebido:', qr);
+                const qrcodeDiv = document.getElementById('qrcode');
+                const loginMessage = document.getElementById('loginMessage');
+                const retryQRButton = document.getElementById('retryQR');
+                const qrTimerDiv = document.getElementById('qrTimer');
+                qrcodeDiv.innerHTML = ''; // Clear previous QR code
+                clearInterval(qrTimer); // Clear previous timer
+                qrTimerDiv.classList.add('hidden');
+
+                if (qr && typeof qr === 'string' && qr.trim() !== '') {
+                    console.log('Tentando renderizar QR code...');
+                    try {
+                        qrcodeInstance = new QRCode(qrcodeDiv, {
+                            text: qr,
+                            width: 200,
+                            height: 200,
+                            colorDark: '#000000',
+                            colorLight: '#ffffff',
+                            correctLevel: QRCode.CorrectLevel.H
+                        });
+                        console.log('✅ QR code renderizado no modal');
+                        loginMessage.textContent = 'Escaneie o QR code abaixo para conectar o bot.';
+                        qrcodeDiv.classList.remove('hidden');
+                        retryQRButton.classList.remove('hidden');
+                        startQRTimer(60); // Start 60-second timer (matches backend)
+                        document.getElementById('adminNumber').classList.add('hidden');
+                        document.getElementById('requestCode').classList.add('hidden');
+                    } catch (err) {
+                        console.error('❌ Erro ao renderizar QR code:', err);
+                        loginMessage.textContent = 'Erro ao renderizar QR code. Tente novamente.';
+                        retryQRButton.classList.remove('hidden');
+                        qrcodeDiv.classList.add('hidden');
+                    }
+                } else {
+                    console.log('⚠️ QR code nulo ou inválido');
+                    qrcodeDiv.classList.add('hidden');
+                    retryQRButton.classList.add('hidden');
+                    loginMessage.textContent = 'Insira o número do administrador (ex.: 557182547726) para receber um código de verificação via WhatsApp.';
+                    document.getElementById('adminNumber').classList.remove('hidden');
+                    document.getElementById('requestCode').classList.remove('hidden');
+                }
+            });
+
+            socket.on('botStatus', (data) => {
+                console.log('📋 Status do bot recebido:', data);
+                const loginMessage = document.getElementById('loginMessage');
+                const retryQRButton = document.getElementById('retryQR');
+                const qrcodeDiv = document.getElementById('qrcode');
+                if (data.isReady) {
+                    qrcodeDiv.classList.add('hidden');
+                    retryQRButton.classList.add('hidden');
+                    clearInterval(qrTimer);
+                    document.getElementById('qrTimer').classList.add('hidden');
+                    loginMessage.textContent = 'Insira o número do administrador (ex.: 557182547726) para receber um código de verificação via WhatsApp.';
+                    document.getElementById('adminNumber').classList.remove('hidden');
+                    document.getElementById('requestCode').classList.remove('hidden');
+                } else {
+                    loginMessage.textContent = 'O bot não está conectado. Escaneie o QR code abaixo para conectar antes de fazer login.';
+                    retryQRButton.classList.remove('hidden');
+                }
+            });
+
+            socket.on('qrError', (error) => {
+                console.error('❌ Erro do servidor ao gerar QR:', error);
+                document.getElementById('loginMessage').textContent = 'Erro ao gerar QR code. Tente novamente.';
+                document.getElementById('retryQR').classList.remove('hidden');
+                document.getElementById('qrcode').classList.add('hidden');
+                clearInterval(qrTimer);
+                document.getElementById('qrTimer').classList.add('hidden');
+            });
+
+            socket.on('disconnect', () => {
+                console.log('❌ Desconectado do WebSocket');
+                document.getElementById('loginMessage').textContent = 'Desconectado do servidor. Tente recarregar a página.';
+                document.getElementById('retryQR').classList.remove('hidden');
+                clearInterval(qrTimer);
+                document.getElementById('qrTimer').classList.add('hidden');
+            });
+        }
+
+        // Start QR code expiration timer
+        function startQRTimer(seconds) {
+            let timeLeft = seconds;
+            const qrTimerDiv = document.getElementById('qrTimer');
+            qrTimerDiv.classList.remove('hidden');
+            qrTimerDiv.textContent = `QR code expira em ${timeLeft} segundos`;
+            qrTimer = setInterval(() => {
+                timeLeft--;
+                if (timeLeft <= 0) {
+                    clearInterval(qrTimer);
+                    qrTimerDiv.textContent = 'QR code expirado. Gere um novo.';
+                    document.getElementById('qrcode').classList.add('hidden');
+                    document.getElementById('retryQR').classList.remove('hidden');
+                } else {
+                    qrTimerDiv.textContent = `QR code expira em ${timeLeft} segundos`;
+                }
+            }, 1000);
+        }
+
+        // Check bot status with retry mechanism
+        async function checkBotStatus(retryCount = 0) {
+            const maxRetries = 3;
+            const loginMessage = document.getElementById('loginMessage');
+            loginMessage.textContent = 'Verificando status do bot...';
+            loginMessage.classList.add('loading');
+            try {
+                const response = await fetch('/api/status');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                console.log('📋 Status do bot (API):', data);
+                loginMessage.classList.remove('loading');
+                if (data.isReady) {
+                    loginMessage.textContent = 'Insira o número do administrador (ex.: 557182547726) para receber um código de verificação via WhatsApp.';
+                    document.getElementById('qrcode').classList.add('hidden');
+                    document.getElementById('retryQR').classList.add('hidden');
+                    clearInterval(qrTimer);
+                    document.getElementById('qrTimer').classList.add('hidden');
+                    document.getElementById('adminNumber').classList.remove('hidden');
+                    document.getElementById('requestCode').classList.remove('hidden');
+                } else {
+                    loginMessage.textContent = 'O bot não está conectado. Escaneie o QR code abaixo para conectar antes de fazer login.';
+                    document.getElementById('retryQR').classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error('❌ Erro ao verificar status:', err);
+                loginMessage.classList.remove('loading');
+                if (retryCount < maxRetries) {
+                    loginMessage.textContent = `Tentativa ${retryCount + 1} de ${maxRetries} falhou. Tentando novamente...`;
+                    setTimeout(() => checkBotStatus(retryCount + 1), 2000);
+                } else {
+                    loginMessage.textContent = 'Erro ao verificar status do bot. Tente novamente.';
+                    document.getElementById('retryQR').classList.remove('hidden');
+                }
+            }
+        }
+
+        // Retry QR code generation
+        document.getElementById('retryQR').addEventListener('click', () => {
+            console.log('🔄 Solicitando novo QR code');
+            const retryQRButton = document.getElementById('retryQR');
+            retryQRButton.disabled = true;
+            retryQRButton.textContent = 'Gerando novo QR...';
+            retryQRButton.classList.add('loading');
+            checkBotStatus();
+            socket.emit('requestQR');
+            setTimeout(() => {
+                retryQRButton.disabled = false;
+                retryQRButton.textContent = 'Tentar Gerar QR Code Novamente';
+                retryQRButton.classList.remove('loading');
+            }, 3000); // Prevent spamming for 3 seconds
+        });
+
+        // Request verification code
+        document.getElementById('requestCode').addEventListener('click', async () => {
+            const adminNumber = document.getElementById('adminNumber').value;
+            const error = document.getElementById('loginError');
+            const requestButton = document.getElementById('requestCode');
+            error.classList.add('hidden');
+            requestButton.classList.add('loading');
+            requestButton.disabled = true;
+
+            if (!adminNumber.match(/^\d{12,13}$/)) {
+                error.textContent = 'Por favor, insira um número válido (ex.: 557182547726).';
+                error.classList.remove('hidden');
+                requestButton.classList.remove('loading');
+                requestButton.disabled = false;
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/request-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ adminNumber })
+                });
+                const data = await response.json();
+                requestButton.classList.remove('loading');
+                requestButton.disabled = false;
+                if (data.success) {
+                    document.getElementById('requestCode').classList.add('hidden');
+                    document.getElementById('adminNumber').classList.add('hidden');
+                    document.getElementById('verificationCode').classList.remove('hidden');
+                    document.getElementById('verifyCode').classList.remove('hidden');
+                    document.getElementById('loginMessage').textContent = 'Digite o código de verificação enviado para o seu WhatsApp.';
+                } else {
+                    error.textContent = data.message || 'Erro ao enviar código.';
+                    error.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error('❌ Erro ao solicitar código:', err);
+                error.textContent = 'Erro ao enviar código. Tente novamente.';
+                error.classList.remove('hidden');
+                requestButton.classList.remove('loading');
+                requestButton.disabled = false;
+            }
+        });
+
+        // Verify code
+        document.getElementById('verifyCode').addEventListener('click', async () => {
+            const adminNumber = document.getElementById('adminNumber').value;
+            const code = document.getElementById('verificationCode').value;
+            const error = document.getElementById('loginError');
+            const verifyButton = document.getElementById('verifyCode');
+            error.classList.add('hidden');
+            verifyButton.classList.add('loading');
+            verifyButton.disabled = true;
+
+            if (!code.match(/^\d{6}$/)) {
+                error.textContent = 'Por favor, insira um código de 6 dígitos.';
+                error.classList.remove('hidden');
+                verifyButton.classList.remove('loading');
+                verifyButton.disabled = false;
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/verify-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ adminNumber, code })
+                });
+                const data = await response.json();
+                verifyButton.classList.remove('loading');
+                verifyButton.disabled = false;
+                if (data.success) {
+                    isLoggedIn = true;
+                    document.getElementById('loginModal').classList.add('modal-hidden');
+                    document.getElementById('adminPanel').classList.remove('hidden');
+                    startAutoRefresh(); // Start auto-refresh after login
+                } else {
+                    error.textContent = data.message || 'Código inválido.';
+                    error.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error('❌ Erro ao verificar código:', err);
+                error.textContent = 'Erro ao verificar código. Tente novamente.';
+                error.classList.remove('hidden');
+                verifyButton.classList.remove('loading');
+                verifyButton.disabled = false;
+            }
+        });
+
+        // Start auto-refresh for attendances and new orders
+        function startAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval); // Clear any existing interval
+            }
+            autoRefreshInterval = setInterval(() => {
+                if (isLoggedIn && document.getElementById('attendancesTable').classList.contains('hidden') === false) {
+                    listOngoingAttendances();
+                } else if (isLoggedIn && document.getElementById('newOrdersTable').classList.contains('hidden') === false) {
+                    listNewOrders();
+                }
+            }, 10000); // Refresh every 10 seconds
+        }
+
+        // Stop auto-refresh
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+
+        // Logout
+        document.getElementById('logoutButton').addEventListener('click', () => {
+            isLoggedIn = false;
+            stopAutoRefresh(); // Stop auto-refresh on logout
+            document.getElementById('adminPanel').classList.add('hidden');
+            document.getElementById('loginModal').classList.remove('modal-hidden');
+            document.getElementById('adminNumber').value = '';
+            document.getElementById('verificationCode').value = '';
+            document.getElementById('requestCode').classList.remove('hidden');
+            document.getElementById('adminNumber').classList.remove('hidden');
+            document.getElementById('verificationCode').classList.add('hidden');
+            document.getElementById('verifyCode').classList.add('hidden');
+            document.getElementById('loginError').classList.add('hidden');
+            document.getElementById('qrcode').innerHTML = '';
+            document.getElementById('loginMessage').textContent = 'Verificando status do bot...';
+            clearInterval(qrTimer);
+            document.getElementById('qrTimer').classList.add('hidden');
+            checkBotStatus();
+        });
+
+        // Open confirmation modal
+        function openConfirmModal(action, message, chatId = null) {
+            currentAction = action;
+            currentChatId = chatId; // Store chatId for actions that need it
+            document.getElementById('confirmMessage').textContent = message;
+            document.getElementById('confirmModal').classList.remove('modal-hidden');
+            document.getElementById('confirmAction').onclick = () => {
+                if (action === 'finalize_attendance') {
+                    finalizeAttendance(chatId);
+                } else if (action === 'delete_blocked_number') {
+                    confirmDeleteBlockedNumber(chatId);
+                } else {
+                    executeAdminAction(action);
+                }
+            };
+        }
+
+        // Open WhatsApp action modal
+        function openWhatsAppActionModal(action, message) {
+            currentAction = action;
+            document.getElementById('whatsAppActionMessage').textContent = message;
+            document.getElementById('whatsAppActionModal').classList.remove('modal-hidden');
+        }
+
+        // Close modal
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('modal-hidden');
+        }
+
+        // Execute admin action
+        async function executeAdminAction(action) {
+            const confirmButton = document.getElementById('confirmAction');
+            confirmButton.classList.add('loading');
+            confirmButton.disabled = true;
+            try {
+                if (action === 'reset_all') {
+                    // Execute reset_atendimentos
+                    let response = await fetch('/api/admin-action', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'reset_atendimentos' })
+                    });
+                    let data = await response.json();
+                    if (!data.success) {
+                        throw new Error(data.message || 'Erro ao resetar atendimentos.');
+                    }
+
+                    // Execute reset_saudados
+                    response = await fetch('/api/admin-action', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'reset_saudados' })
+                    });
+                    data = await response.json();
+                    if (!data.success) {
+                        throw new Error(data.message || 'Erro ao resetar saudações.');
+                    }
+
+                    alert('Todos os atendimentos e saudações foram resetados com sucesso.');
+                    closeModal('confirmModal');
+                    listOngoingAttendances();
+                } else {
+                    // Handle other actions
+                    const response = await fetch('/api/admin-action', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        alert(data.message);
+                        closeModal('confirmModal');
+                        if (action === 'reset_cadastros') listCadastros();
+                        if (action === 'reset_atendimentos') listOngoingAttendances();
+                    } else {
+                        throw new Error(data.message || 'Erro ao executar ação.');
+                    }
+                }
+            } catch (err) {
+                console.error('❌ Erro ao executar ação:', err);
+                alert(`Erro: ${err.message}`);
+                confirmButton.classList.remove('loading');
+                confirmButton.disabled = false;
+            }
+            confirmButton.classList.remove('loading');
+            confirmButton.disabled = false;
+        }
+
+        // List cadastros
+        async function listCadastros() {
+            const button = document.querySelector('button[onclick="listCadastros()"]');
+            button.classList.add('loading');
+            button.disabled = true;
+            try {
+                const response = await fetch('/api/list-cadastros');
+                const data = await response.json();
+                button.classList.remove('loading');
+                button.disabled = false;
+                if (data.success) {
+                    const tbody = document.getElementById('cadastrosBody');
+                    tbody.innerHTML = '';
+                    if (data.cadastros.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-gray-600">Nenhum cadastro encontrado.</td></tr>';
+                    } else {
+                        data.cadastros.forEach(cadastro => {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td class="p-3">${cadastro.id}</td>
+                                <td class="p-3">${cadastro.nome}</td>
+                                <td class="p-3">${cadastro.numero.slice(0, -5)}</td>
+                                <td class="p-3">${cadastro.restaurante}</td>
+                                <td class="p-3">${cadastro.chat_id_original.slice(0, -5)}</td>
+                                <td class="p-3">${new Date(cadastro.timestamp).toLocaleString('pt-BR')}</td>
+                                <td class="p-3">
+                                    <button onclick="openDeleteCadastroModal(${cadastro.id})" class="btn-danger text-white p-2 rounded">Deletar</button>
+                                </td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                    }
+                    document.getElementById('cadastrosTable').classList.remove('hidden');
+                    document.getElementById('attendancesTable').classList.add('hidden');
+                    document.getElementById('newOrdersTable').classList.add('hidden');
+                    document.getElementById('blockedNumbersTable').classList.add('hidden');
+                    stopAutoRefresh(); // Stop auto-refresh when viewing cadastros
+                } else {
+                    alert(data.message || 'Erro ao listar cadastros.');
+                }
+            } catch (err) {
+                console.error('❌ Erro ao listar cadastros:', err);
+                alert('Erro ao listar cadastros. Tente novamente.');
+                button.classList.remove('loading');
+                button.disabled = false;
+            }
+        }
+
+        // Export cadastros
+        async function exportCadastros() {
+            const button = document.querySelector('button[onclick="exportCadastros()"]');
+            button.classList.add('loading');
+            button.disabled = true;
+            try {
+                const response = await fetch('/api/export-cadastros');
+                const csvContent = await response.text();
+                const blob = new Blob([csvContent], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'cadastros_exportados.csv';
+                a.click();
+                window.URL.revokeObjectURL(url);
+                button.classList.remove('loading');
+                button.disabled = false;
+            } catch (err) {
+                console.error('❌ Erro ao exportar cadastros:', err);
+                alert('Erro ao exportar cadastros. Tente novamente.');
+                button.classList.remove('loading');
+                button.disabled = false;
+            }
+        }
+
+        // Open delete cadastro modal
+        function openDeleteCadastroModal(id) {
+            document.getElementById('deleteCadastroId').value = id;
+            document.getElementById('deleteCadastroModal').classList.remove('modal-hidden');
+        }
+
+        // Confirm delete cadastro
+        async function confirmDeleteCadastro() {
+            const id = document.getElementById('deleteCadastroId').value;
+            const error = document.getElementById('deleteError');
+            const confirmButton = document.querySelector('#deleteCadastroModal .btn-danger');
+            error.classList.add('hidden');
+            confirmButton.classList.add('loading');
+            confirmButton.disabled = true;
+
+            if (!id || isNaN(id) || id < 1) {
+                error.textContent = 'Por favor, insira um ID válido.';
+                error.classList.remove('hidden');
+                confirmButton.classList.remove('loading');
+                confirmButton.disabled = false;
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/delete-cadastro', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const data = await response.json();
+                confirmButton.classList.remove('loading');
+                confirmButton.disabled = false;
+                if (data.success) {
+                    alert(data.message);
+                    closeModal('deleteCadastroModal');
+                    listCadastros();
+                } else {
+                    error.textContent = data.message || 'Erro ao deletar cadastro.';
+                    error.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error('❌ Erro ao deletar cadastro:', err);
+                error.textContent = 'Erro ao deletar cadastro. Tente novamente.';
+                error.classList.remove('hidden');
+                confirmButton.classList.remove('loading');
+                confirmButton.disabled = false;
+            }
+        }
+
+        // List ongoing attendances
+        async function listOngoingAttendances() {
+            const button = document.querySelector('button[onclick="listOngoingAttendances()"]');
+            button.classList.add('loading');
+            button.disabled = true;
+            try {
+                const response = await fetch('/api/list-ongoing-attendances');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                button.classList.remove('loading');
+                button.disabled = false;
+                if (data.success) {
+                    const tbody = document.getElementById('attendancesBody');
+                    tbody.innerHTML = '';
+                    if (data.attendances.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="6" class="p-3 text-center text-gray-600">Nenhum atendimento encontrado.</td></tr>';
+                    } else {
+                        data.attendances.forEach(attendance => {
+                            const tipo = attendance.tipo || 'Ativo';
+                            const nome = attendance.nome || 'Desconhecido';
+                            const isBotInactive = ['2', '3', '5', 'novo_pedido'].includes(tipo);
+                            const statusClass = isBotInactive ? 'status-inactive' : 'status-active';
+                            const statusText = isBotInactive ? 'Bot desativado (em intervenção)' : 'Bot ativo';
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td class="p-3">${attendance.chat_id.slice(0, -5)}</td>
+                                <td class="p-3">${nome}</td>
+                                <td class="p-3">${tipo}</td>
+                                <td class="p-3">${attendance.timestamp || attendance.ultima_mensagem ? new Date(attendance.timestamp || attendance.ultima_mensagem).toLocaleString('pt-BR') : 'N/A'}</td>
+                                <td class="p-3"><span class="status-indicator ${statusClass}"></span>${statusText}</td>
+                                <td class="p-3">
+                                    <button onclick="intervene('${attendance.chat_id}')" class="btn-danger text-white p-2 rounded mr-2">Intervir</button>
+                                    <button onclick="reactivate('${attendance.chat_id}')" class="btn-primary text-white p-2 rounded mr-2">Reativar</button>
+                                    <button onclick="openWhatsApp('${attendance.chat_id}')" class="btn-whatsapp text-white p-2 rounded mr-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M20.1 3.9C17.7 1.5 14.5 0 11.1 0 5 0 0 5 0 11.1c0 2 .6 3.9 1.7 5.6L0 24l7.5-2c1.7.9 3.6 1.4 5.6 1.4C19.2 23.4 24.2 18.4 24.2 12.3c0-3.4-1.5-6.6-4.1-8.4zm-8.9 18.3c-1.7 0-3.4-.5-4.9-1.4l-.3-.2-4.4 1.2 1.2-4.3-.2-.3c-.9-1.5-1.4-3.2-1.4-5 0-5.2 4.2-9.4 9.4-9.4 2.5 0 4.9 1 6.7 2.8 1.8 1.8 2.8 4.2 2.8 6.7 0 5.2-4.2 9.4-9.4 9.4zm5.1-7.1c-.3-.1-1.7-.8-2--.9-.3-.1-.5-.1-.7.1-.2.2-.8.9-.9 1.1-.1.2-.2.2-.4.1-.2-.1-.9-.4-1.7-.8-.6-.3-1.1-.7-1.5-1.2-.4-.5-.5-.9-.3-1.1.1-.2.3-.4.4-.6.2-.2.2-.4.3-.6.1-.2 0-.4-.1-.6-.1-.2-.7-1.7-.9-2.3-.2-.6-.4-.5-.7-.5-.2 0-.5 0-.8 0-.3 0-.5.1-.7.4-.2.3-.8 1-.8 2.4 0 1.4.8 2.7 1 2.9.2.2 1.7 2.7 4.2 3.8.6.3 1.1.5 1.5.6.4.1.9.2 1.4.1.5-.1 1.6-.7 1.8-1.3.2-.6.2-1.1.1-1.3-.1-.2-.3-.3-.5-.4z"/>
+                                        </svg>
+                                    </button>
+                                    <button onclick="openConfirmModal('finalize_attendance', 'Confirmar finalização do atendimento para ${attendance.chat_id.slice(0, -5)}? Isso reativará o bot e resetará a saudação.', '${attendance.chat_id}')" class="btn-danger text-white p-2 rounded mr-2">Finalizar Atendimento</button>
+                                    <button onclick="blockNumberFromAttendance('${attendance.chat_id}')" class="btn-danger text-white p-2 rounded">Bloquear</button>
+                                </td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                    }
+                    document.getElementById('attendancesTable').classList.remove('hidden');
+                    document.getElementById('cadastrosTable').classList.add('hidden');
+                    document.getElementById('newOrdersTable').classList.add('hidden');
+                    document.getElementById('blockedNumbersTable').classList.add('hidden');
+                    startAutoRefresh(); // Ensure auto-refresh is active when viewing attendances
+                } else {
+                    if (data.message && data.message.includes('no such column: tipo')) {
+                        alert('Erro no servidor: Coluna "tipo" não encontrada no banco de dados. Verifique os logs do backend e adicione a coluna se necessário. Tente novamente após correção.');
+                    } else {
+                        alert(data.message || 'Erro ao listar atendimentos.');
+                    }
+                }
+            } catch (err) {
+                console.error('❌ Erro ao listar atendimentos:', err);
+                if (err.message.includes('SQLITE_ERROR')) {
+                    alert('Erro no banco de dados (possivelmente coluna "tipo" ausente). Verifique os logs do servidor e tente novamente.');
+                } else {
+                    alert('Erro ao listar atendimentos. Tente novamente.');
+                }
+                button.classList.remove('loading');
+                button.disabled = false;
+            }
+        }
+
+        // List new orders
+        async function listNewOrders() {
+            const button = document.querySelector('button[onclick="listNewOrders()"]');
+            button.classList.add('loading');
+            button.disabled = true;
+            try {
+                const response = await fetch('/api/list-ongoing-attendances');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                button.classList.remove('loading');
+                button.disabled = false;
+                if (data.success) {
+                    const tbody = document.getElementById('newOrdersBody');
+                    tbody.innerHTML = '';
+                    const newOrders = data.attendances.filter(attendance => attendance.tipo === 'novo_pedido');
+                    if (newOrders.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="6" class="p-3 text-center text-gray-600">Nenhum novo pedido encontrado.</td></tr>';
+                    } else {
+                        newOrders.forEach(attendance => {
+                            const tipo = attendance.tipo || 'novo_pedido';
+                            const nome = attendance.nome || 'Desconhecido';
+                            const isBotInactive = ['2', '3', '5', 'novo_pedido'].includes(tipo);
+                            const statusClass = isBotInactive ? 'status-inactive' : 'status-active';
+                            const statusText = isBotInactive ? 'Bot desativado (em intervenção)' : 'Bot ativo';
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td class="p-3">${attendance.chat_id.slice(0, -5)}</td>
+                                <td class="p-3">${nome}</td>
+                                <td class="p-3">${tipo}</td>
+                                <td class="p-3">${attendance.timestamp || attendance.ultima_mensagem ? new Date(attendance.timestamp || attendance.ultima_mensagem).toLocaleString('pt-BR') : 'N/A'}</td>
+                                <td class="p-3"><span class="status-indicator ${statusClass}"></span>${statusText}</td>
+                                <td class="p-3">
+                                    <button onclick="intervene('${attendance.chat_id}')" class="btn-danger text-white p-2 rounded mr-2">Intervir</button>
+                                    <button onclick="reactivate('${attendance.chat_id}')" class="btn-primary text-white p-2 rounded mr-2">Reativar</button>
+                                    <button onclick="openWhatsApp('${attendance.chat_id}')" class="btn-whatsapp text-white p-2 rounded mr-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M20.1 3.9C17.7 1.5 14.5 0 11.1 0 5 0 0 5 0 11.1c0 2 .6 3.9 1.7 5.6L0 24l7.5-2c1.7.9 3.6 1.4 5.6 1.4C19.2 23.4 24.2 18.4 24.2 12.3c0-3.4-1.5-6.6-4.1-8.4zm-8.9 18.3c-1.7 0-3.4-.5-4.9-1.4l-.3-.2-4.4 1.2 1.2-4.3-.2-.3c-.9-1.5-1.4-3.2-1.4-5 0-5.2 4.2-9.4 9.4-9.4 2.5 0 4.9 1 6.7 2.8 1.8 1.8 2.8 4.2 2.8 6.7 0 5.2-4.2 9.4-9.4 9.4zm5.1-7.1c-.3-.1-1.7-.8-2--.9-.3-.1-.5-.1-.7.1-.2.2-.8.9-.9 1.1-.1.2-.2.2-.4.1-.2-.1-.9-.4-1.7-.8-.6-.3-1.1-.7-1.5-1.2-.4-.5-.5-.9-.3-1.1.1-.2.3-.4.4-.6.2-.2.2-.4.3-.6.1-.2 0-.4-.1-.6-.1-.2-.7-1.7-.9-2.3-.2-.6-.4-.5-.7-.5-.2 0-.5 0-.8 0-.3 0-.5.1-.7.4-.2.3-.8 1-.8 2.4 0 1.4.8 2.7 1 2.9.2.2 1.7 2.7 4.2 3.8.6.3 1.1.5 1.5.6.4.1.9.2 1.4.1.5-.1 1.6-.7 1.8-1.3.2-.6.2-1.1.1-1.3-.1-.2-.3-.3-.5-.4z"/>
+                                        </svg>
+                                    </button>
+                                    <button onclick="openConfirmModal('finalize_attendance', 'Confirmar finalização do atendimento para ${attendance.chat_id.slice(0, -5)}? Isso reativará o bot e resetará a saudação.', '${attendance.chat_id}')" class="btn-danger text-white p-2 rounded mr-2">Finalizar Atendimento</button>
+                                    <button onclick="blockNumberFromAttendance('${attendance.chat_id}')" class="btn-danger text-white p-2 rounded">Bloquear</button>
+                                </td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                    }
+                    document.getElementById('newOrdersTable').classList.remove('hidden');
+                    document.getElementById('cadastrosTable').classList.add('hidden');
+                    document.getElementById('attendancesTable').classList.add('hidden');
+                    document.getElementById('blockedNumbersTable').classList.add('hidden');
+                    startAutoRefresh(); // Ensure auto-refresh is active when viewing new orders
+                } else {
+                    if (data.message && data.message.includes('no such column: tipo')) {
+                        alert('Erro no servidor: Coluna "tipo" não encontrada no banco de dados. Verifique os logs do backend e adicione a coluna se necessário. Tente novamente após correção.');
+                    } else {
+                        alert(data.message || 'Erro ao listar novos pedidos.');
+                    }
+                }
+            } catch (err) {
+                console.error('❌ Erro ao listar novos pedidos:', err);
+                if (err.message.includes('SQLITE_ERROR')) {
+                    alert('Erro no banco de dados (possivelmente coluna "tipo" ausente). Verifique os logs do servidor e tente novamente.');
+                } else {
+                    alert('Erro ao listar novos pedidos. Tente novamente.');
+                }
+                button.classList.remove('loading');
+                button.disabled = false;
+            }
+        }
+
+        // List blocked numbers
+        async function listBlockedNumbers() {
+            const button = document.querySelector('button[onclick="listBlockedNumbers()"]');
+            button.classList.add('loading');
+            button.disabled = true;
+            try {
+                const response = await fetch('/api/list-blocked-numbers');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                button.classList.remove('loading');
+                button.disabled = false;
+                if (data.success) {
+                    const tbody = document.getElementById('blockedNumbersBody');
+                    tbody.innerHTML = '';
+                    if (data.numbers.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="3" class="p-3 text-center text-gray-600">Nenhum número bloqueado encontrado.</td></tr>';
+                    } else {
+                        data.numbers.forEach(number => {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td class="p-3">${number.phone_number}</td>
+                                <td class="p-3">${new Date(number.timestamp).toLocaleString('pt-BR')}</td>
+                                <td class="p-3">
+                                    <button onclick="openConfirmModal('delete_blocked_number', 'Confirmar remoção do número ${number.phone_number} da lista de bloqueados?', '${number.phone_number}')" class="btn-danger text-white p-2 rounded">Remover</button>
+                                </td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                    }
+                    document.getElementById('blockedNumbersTable').classList.remove('hidden');
+                    document.getElementById('cadastrosTable').classList.add('hidden');
+                    document.getElementById('attendancesTable').classList.add('hidden');
+                    document.getElementById('newOrdersTable').classList.add('hidden');
+                    stopAutoRefresh(); // Stop auto-refresh when viewing blocked numbers
+                } else {
+                    alert(data.message || 'Erro ao listar números bloqueados.');
+                }
+            } catch (err) {
+                console.error('❌ Erro ao listar números bloqueados:', err);
+                alert('Erro ao listar números bloqueados. Tente novamente.');
+                button.classList.remove('loading');
+                button.disabled = false;
+            }
+        }
+
+        // Open add number modal
+        function openAddNumberModal() {
+            document.getElementById('blockNumber').value = '';
+            document.getElementById('addNumberError').classList.add('hidden');
+            document.getElementById('addNumberModal').classList.remove('modal-hidden');
+        }
+
+        // Confirm add number
+        async function confirmAddNumber() {
+            const phoneNumber = document.getElementById('blockNumber').value;
+            const error = document.getElementById('addNumberError');
+            const confirmButton = document.querySelector('#addNumberModal .btn-primary');
+            error.classList.add('hidden');
+            confirmButton.classList.add('loading');
+            confirmButton.disabled = true;
+
+            if (!phoneNumber.match(/^\d{12,13}$/)) {
+                error.textContent = 'Por favor, insira um número válido (ex.: 557182547726).';
+                error.classList.remove('hidden');
+                confirmButton.classList.remove('loading');
+                confirmButton.disabled = false;
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/add-number-to-blocklist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phoneNumber })
+                });
+                const data = await response.json();
+                confirmButton.classList.remove('loading');
+                confirmButton.disabled = false;
+                if (data.success) {
+                    alert(data.message || 'Número adicionado com sucesso.');
+                    closeModal('addNumberModal');
+                    listBlockedNumbers();
+                } else {
+                    error.textContent = data.message || 'Erro ao adicionar número.';
+                    error.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error('❌ Erro ao adicionar número:', err);
+                error.textContent = 'Erro ao adicionar número. Tente novamente.';
+                error.classList.remove('hidden');
+                confirmButton.classList.remove('loading');
+                confirmButton.disabled = false;
+            }
+        }
+
+        // Block number from attendance
+        async function blockNumberFromAttendance(chatId) {
+            const phoneNumber = chatId.slice(0, -5); // Remove '@c.us' from chatId
+            const button = document.querySelector(`button[onclick="blockNumberFromAttendance('${chatId}')"]`);
+            button.classList.add('loading');
+            button.disabled = true;
+
+            if (!phoneNumber.match(/^\d{12,13}$/)) {
+                alert('Número inválido. Deve conter 12 ou 13 dígitos (ex.: 557182547726).');
+                button.classList.remove('loading');
+                button.disabled = false;
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/add-number-to-blocklist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phoneNumber })
+                });
+                const data = await response.json();
+                button.classList.remove('loading');
+                button.disabled = false;
+                if (data.success) {
+                    alert(data.message || 'Número bloqueado com sucesso.');
+                    listOngoingAttendances(); // Refresh attendances table
+                    listNewOrders(); // Refresh new orders table
+                } else {
+                    alert(data.message || 'Erro ao bloquear número.');
+                }
+            } catch (err) {
+                console.error('❌ Erro ao bloquear número:', err);
+                alert('Erro ao bloquear número. Tente novamente.');
+                button.classList.remove('loading');
+                button.disabled = false;
+            }
+        }
+
+        // Confirm delete blocked number
+        async function confirmDeleteBlockedNumber(phoneNumber) {
+            const confirmButton = document.getElementById('confirmAction');
+            confirmButton.classList.add('loading');
+            confirmButton.disabled = true;
+
+            // Garantir que o número esteja no formato correto (com @c.us)
+            let formattedPhoneNumber = phoneNumber;
+            if (!phoneNumber.endsWith('@c.us')) {
+                formattedPhoneNumber = phoneNumber.replace(/\D/g, '') + '@c.us';
+            }
+
+            console.log('🔍 Enviando requisição para remover número:', formattedPhoneNumber);
+
+            try {
+                const response = await fetch('/api/remove-blocked-number', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phoneNumber: formattedPhoneNumber })
+                });
+                const data = await response.json();
+                confirmButton.classList.remove('loading');
+                confirmButton.disabled = false;
+                if (data.success) {
+                    alert(data.message || 'Número removido com sucesso.');
+                    closeModal('confirmModal');
+                    listBlockedNumbers();
+                } else {
+                    console.error('❌ Resposta do servidor:', data);
+                    alert(data.message || 'Erro ao remover número.');
+                }
+            } catch (err) {
+                console.error('❌ Erro ao remover número:', err);
+                alert('Erro ao remover número. Tente novamente.');
+                confirmButton.classList.remove('loading');
+                confirmButton.disabled = false;
+            }
+        }
+
+        // Finalize attendance
+        async function finalizeAttendance(chatId) {
+            const button = document.querySelector(`button[onclick="openConfirmModal('finalize_attendance', 'Confirmar finalização do atendimento para ${chatId.slice(0, -5)}? Isso reativará o bot e resetará a saudação.', '${chatId}')"]`);
+            button.classList.add('loading');
+            button.disabled = true;
+            try {
+                // First, call reactivate endpoint
+                const reactivateResponse = await fetch(`/api/reactivate/${chatId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const reactivateData = await reactivateResponse.json();
+                
+                if (!reactivateData.success) {
+                    throw new Error(reactivateData.message || 'Erro ao reativar bot.');
+                }
+
+                // Then, reset saudacao
+                const resetResponse = await fetch(`/api/reset-saudacao/${chatId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const resetData = await resetResponse.json();
+
+                button.classList.remove('loading');
+                button.disabled = false;
+
+                if (resetData.success) {
+                    alert('Atendimento finalizado e saudação resetada com sucesso.');
+                    closeModal('confirmModal');
+                    listOngoingAttendances();
+                } else {
+                    throw new Error(resetData.message || 'Erro ao resetar saudação.');
+                }
+            } catch (err) {
+                console.error('❌ Erro ao finalizar atendimento:', err);
+                alert('Erro ao finalizar atendimento. Tente novamente.');
+                button.classList.remove('loading');
+                button.disabled = false;
+            }
+        }
+
+        // Intervene in attendance
+        async function intervene(chatId) {
+            const button = document.querySelector(`button[onclick="intervene('${chatId}')"]`);
+            button.classList.add('loading');
+            button.disabled = true;
+            try {
+                const response = await fetch(`/api/intervene/${chatId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                button.classList.remove('loading');
+                button.disabled = false;
+                if (data.success) {
+                    alert(data.message);
+                    listOngoingAttendances();
+                } else {
+                    alert(data.message || 'Erro ao intervir.');
+                }
+            } catch (err) {
+                console.error('❌ Erro ao intervir:', err);
+                alert('Erro ao intervir. Tente novamente.');
+                button.classList.remove('loading');
+                button.disabled = false;
+            }
+        }
+
+        // Reactivate bot
+        async function reactivate(chatId) {
+            const button = document.querySelector(`button[onclick="reactivate('${chatId}')"]`);
+            button.classList.add('loading');
+            button.disabled = true;
+            try {
+                const response = await fetch(`/api/reactivate/${chatId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                button.classList.remove('loading');
+                button.disabled = false;
+                if (data.success) {
+                    alert(data.message);
+                    listOngoingAttendances();
+                } else {
+                    alert(data.message || 'Erro ao reativar bot.');
+                }
+            } catch (err) {
+                console.error('❌ Erro ao reativar:', err);
+                alert('Erro ao reativar. Tente novamente.');
+                button.classList.remove('loading');
+                button.disabled = false;
+            }
+        }
+
+        // Open WhatsApp
+        function openWhatsApp(chatId) {
+            const phoneNumber = chatId.slice(0, -5); // Remove '@c.us'
+            window.open(`https://wa.me/${phoneNumber}`, '_blank');
+        }
+    </script>
+</body>
+</html>
